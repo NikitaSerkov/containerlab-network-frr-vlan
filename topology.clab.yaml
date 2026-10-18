@@ -1,0 +1,331 @@
+name: network-with-vlan
+
+mgmt:
+  network: mgmt
+  ipv4-subnet: 172.20.20.0/24
+
+topology:
+  nodes:
+    # Router FRR
+    router:
+      kind: linux
+      image: quay.io/frrouting/frr:containerlab-10.7.1
+      mgmt-ipv4: 172.20.20.10
+      binds:
+        - ./frr/frr.conf:/etc/frr/frr.conf
+      exec:
+       - sysctl -w net.ipv4.ip_forward=1
+       - apk add --no-cache iptables
+       - iptables -A FORWARD -s 192.168.1.0/24 -d 192.168.1.100 -j ACCEPT
+       - iptables -A FORWARD -s 192.168.2.0/24 -d 192.168.2.100 -j ACCEPT
+       - iptables -A FORWARD -s 192.168.3.0/24 -d 192.168.3.100 -j ACCEPT
+       - iptables -A FORWARD -s 192.168.1.100 -d 192.168.1.0/24 -j ACCEPT
+       - iptables -A FORWARD -s 192.168.2.100 -d 192.168.2.0/24 -j ACCEPT
+       - iptables -A FORWARD -s 192.168.3.100 -d 192.168.3.0/24 -j ACCEPT
+       - iptables -A FORWARD -s 192.168.1.0/24 -d 192.168.2.0/24 -j DROP
+       - iptables -A FORWARD -s 192.168.1.0/24 -d 192.168.3.0/24 -j DROP
+       - iptables -A FORWARD -s 192.168.2.0/24 -d 192.168.1.0/24 -j DROP
+       - iptables -A FORWARD -s 192.168.2.0/24 -d 192.168.3.0/24 -j DROP
+       - iptables -A FORWARD -s 192.168.3.0/24 -d 192.168.1.0/24 -j DROP
+       - iptables -A FORWARD -s 192.168.3.0/24 -d 192.168.2.0/24 -j DROP
+       - iptables -A FORWARD -j ACCEPT
+    # Switches
+    switch-vlan:
+      kind: cisco_vios
+      type: switch
+      image: vrnetlab/cisco_vios:L2-20200929
+      mgmt-ipv4: 172.20.20.11
+      startup-config: ./l2switches/vlanswitch_config.cfg
+
+    switch1:
+      kind: cisco_vios
+      type: switch
+      image: vrnetlab/cisco_vios:L2-20200929
+      mgmt-ipv4: 172.20.20.12
+      startup-config: ./l2switches/switch_network1.cfg
+
+    switch2:
+      kind: cisco_vios
+      type: switch
+      image: vrnetlab/cisco_vios:L2-20200929
+      mgmt-ipv4: 172.20.20.13
+      startup-config: ./l2switches/switch_network2.cfg
+
+    switch3:
+      kind: cisco_vios
+      type: switch
+      image: vrnetlab/cisco_vios:L2-20200929
+      mgmt-ipv4: 172.20.20.14
+      startup-config: ./l2switches/switch_network3.cfg
+
+    # VLAN 10 working PC internet
+    pc10-1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.101
+      exec:
+        - ip addr add 192.168.10.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.10.1
+
+    pc10-2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.102
+      exec:
+        - ip addr add 192.168.10.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.10.1
+
+    # VLAN 20 working PC without internet
+    pc20-1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.103
+      exec:
+        - ip addr add 192.168.20.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.20.1
+
+    pc20-2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.104
+      exec:
+        - ip addr add 192.168.20.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.20.1
+
+    # VLAN 30 IP telephones
+    phone1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.105
+      exec:
+        - ip addr add 192.168.30.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.30.1
+
+    phone2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.106
+      exec:
+        - ip addr add 192.168.30.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.30.1
+
+    # VLAN 40 SCADA monitoring
+    monitor-server:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.107
+      exec:
+        - ip addr add 192.168.40.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.40.1
+
+    monitor-client:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.108
+      exec:
+        - ip addr add 192.168.40.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.40.1
+
+    # Network 1 working network isolated with data server
+    srv1-data1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.201
+      exec:
+        - ip addr add 192.168.1.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.1.1
+
+    srv1-data2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.202
+      exec:
+        - ip addr add 192.168.1.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.1.1
+
+    srv1-data3:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.203
+      exec:
+        - ip addr add 192.168.1.12/24 dev eth3
+        - ip link set eth3 up
+        - ip route replace default via 192.168.1.1
+
+    srv1-other1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.204
+      exec:
+        - ip addr add 192.168.1.50/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.1.1
+
+    srv1-other2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.205
+      exec:
+        - ip addr add 192.168.1.51/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.1.1
+
+    # Network 2
+    srv2-data1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.211
+      exec:
+        - ip addr add 192.168.2.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.2.1
+
+    srv2-data2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.212
+      exec:
+        - ip addr add 192.168.2.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.2.1
+
+    srv2-data3:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.213
+      exec:
+        - ip addr add 192.168.2.12/24 dev eth3
+        - ip link set eth3 up
+        - ip route replace default via 192.168.2.1
+
+    srv2-other1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.214
+      exec:
+        - ip addr add 192.168.2.50/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.2.1
+
+    srv2-other2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.215
+      exec:
+        - ip addr add 192.168.2.51/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.2.1
+
+    # Network 3
+    srv3-data1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.221
+      exec:
+        - ip addr add 192.168.3.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.3.1
+
+    srv3-data2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.222
+      exec:
+        - ip addr add 192.168.3.11/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.3.1
+
+    srv3-data3:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.223
+      exec:
+        - ip addr add 192.168.3.12/24 dev eth3
+        - ip link set eth3 up
+        - ip route replace default via 192.168.3.1
+
+    srv3-other1:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.224
+      exec:
+        - ip addr add 192.168.3.50/24 dev eth1
+        - ip link set eth1 up
+        - ip route replace default via 192.168.3.1
+
+    srv3-other2:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.225
+      exec:
+        - ip addr add 192.168.3.51/24 dev eth2
+        - ip link set eth2 up
+        - ip route replace default via 192.168.3.1
+
+    # Export server data colletction for application connect with equipment
+    export-server:
+      kind: linux
+      image: alpine:latest
+      mgmt-ipv4: 172.20.20.100
+      exec:
+        - ip addr add 192.168.1.100/24 dev eth1
+        - ip addr add 192.168.2.100/24 dev eth2
+        - ip addr add 192.168.3.100/24 dev eth3
+        - ip link set eth1 up
+        - ip link set eth2 up
+        - ip link set eth3 up
+        - ip route replace default via 192.168.1.1
+
+  links:
+    # from FRR to switches without VLAN
+    - endpoints: ["router:eth1", "switch1:Gi1"]
+    - endpoints: ["router:eth2", "switch2:Gi1"]
+    - endpoints: ["router:eth3", "switch3:Gi1"]
+    - endpoints: ["router:eth4", "switch-vlan:Gi1"]
+    - endpoints: ["router:eth5", "host:eth1"]
+
+    # from Export-server → switches network 1,2,3
+    - endpoints: ["export-server:eth1", "switch1:Gi2"]
+    - endpoints: ["export-server:eth2", "switch2:Gi2"]
+    - endpoints: ["export-server:eth3", "switch3:Gi2"]
+
+    # Network 1 servers
+    - endpoints: ["srv1-data1:eth1", "switch1:Gi3"]
+    - endpoints: ["srv1-data2:eth2", "switch1:Gi4"]
+    - endpoints: ["srv1-data3:eth3", "switch1:Gi5"]
+    - endpoints: ["srv1-other1:eth1", "switch1:Gi6"]
+    - endpoints: ["srv1-other2:eth2", "switch1:Gi7"]
+
+    # Network 2 servers
+    - endpoints: ["srv2-data1:eth1", "switch2:Gi3"]
+    - endpoints: ["srv2-data2:eth2", "switch2:Gi4"]
+    - endpoints: ["srv2-data3:eth3", "switch2:Gi5"]
+    - endpoints: ["srv2-other1:eth1", "switch2:Gi6"]
+    - endpoints: ["srv2-other2:eth2", "switch2:Gi7"]
+
+    # Network 3 servers
+    - endpoints: ["srv3-data1:eth1", "switch3:Gi3"]
+    - endpoints: ["srv3-data2:eth2", "switch3:Gi4"]
+    - endpoints: ["srv3-data3:eth3", "switch3:Gi5"]
+    - endpoints: ["srv3-other1:eth1", "switch3:Gi6"]
+    - endpoints: ["srv3-other2:eth2", "switch3:Gi7"]
+
+    # VLAN 10 / 20 / 30 / 40 clients
+    - endpoints: ["pc10-1:eth1", "switch-vlan:Gi2"]
+    - endpoints: ["pc10-2:eth2", "switch-vlan:Gi3"]
+    - endpoints: ["pc20-1:eth1", "switch-vlan:Gi4"]
+    - endpoints: ["pc20-2:eth2", "switch-vlan:Gi5"]
+    - endpoints: ["phone1:eth1", "switch-vlan:Gi6"]
+    - endpoints: ["phone2:eth2", "switch-vlan:Gi7"]
+    - endpoints: ["monitor-server:eth1", "switch-vlan:Gi8"]
+    - endpoints: ["monitor-client:eth2", "switch-vlan:Gi9"]
